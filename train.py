@@ -10,49 +10,38 @@ from vocab import Vocab
 from utils import load_data, get_early_stopping_callback
 from dataset import get_train_dataloader, get_eval_dataloader
 
-Tokenizer_Type={
-    'yezi':'zh_tokenizer',
-    'wiki':'bert-base-uncased'
-}
-
 def main(args):
     pl.seed_everything(args.seed)
-
     torch.multiprocessing.set_sharing_strategy('file_system')
-
     args.gpus=torch.cuda.device_count()
     args.multigpu = torch.cuda.device_count() > 1
 
-    use_tokenizer=False
-    for i in Tokenizer_Type.keys():
-        if i in args.train and i in args.valid:
-            use_tokenizer=True
-            tokenizer_type=i
-            break
+    if args.model_type == 'pblm':
+        if args.tokenizer_name is None: args.tokenizer_name = args.plm_name
 
-    train_data = load_data(args.train, args.add_eos, args.cat_sent, args.max_len, None if not use_tokenizer else tokenizer_type)
-    valid_data = load_data(args.valid, args.add_eos, args.cat_sent, args.max_len, None if not use_tokenizer else tokenizer_type)
+    train_data = load_data(args.train, args.add_eos, args.cat_sent, args.max_len, args.tokenizer_name)
+    valid_data = load_data(args.valid, args.add_eos, args.cat_sent, args.max_len, args.tokenizer_name)
 
     os.makedirs(args.root_dir, exist_ok=True)
 
-    if not use_tokenizer:
+    if args.tokenizer_name is None:
         vocab_file = os.path.join(args.root_dir, 'vocab.txt')
         if not os.path.isfile(vocab_file):
             max_blank_len = args.max_len if args.model_type == 'lblm' else None
             Vocab.build(train_data, vocab_file, args.vocab_size, max_blank_len)
-        vocab = Vocab(vocab_file)
-        args.vocab_size = vocab.size
+        tokenizer = Vocab(vocab_file)
+        args.vocab_size = tokenizer.size
     else:
-        from transformers import BertTokenizer
-        tokenizer=BertTokenizer.from_pretrained('zh_tokenizer')
+        from transformers import BertTokenizer, AutoTokenizer
+        tokenizer=AutoTokenizer.from_pretrained(args.tokenizer_name)
         args.vocab_size=tokenizer.vocab_size
 
     train_dl = get_train_dataloader(
-        train_data, vocab if not use_tokenizer else tokenizer, args.max_tok,
+        train_data, tokenizer, args.max_tok,
         data_workers=args.data_workers if not args.multigpu else 0,
         model_type=args.model_type)
     val_dl = get_eval_dataloader(
-        valid_data, vocab if not use_tokenizer else tokenizer, args.eval_max_tok,
+        valid_data, tokenizer, args.eval_max_tok,
         data_workers=args.data_workers if not args.multigpu else 0,
         model_type=args.model_type)
 
@@ -106,9 +95,9 @@ if __name__ == '__main__':
     parser.add_argument('--model_type', default='blm',
                         choices=['blm', 'inst', 'lblm', 'pblm'],
                         help='model type: blm, inst or lblm')
-    parser.add_argument('--plm_type', default='bert-base-uncased',
-                        choices=['bert-base-uncased', 'roberta-base'],
+    parser.add_argument('--plm_name', type=str,
                         help='pretrained model type: available transformers models')
+    parser.add_argument('--tokenizer_name', type=str)
 
     parser.add_argument('--d_model', type=int, default=512,
                         help='transformer dimension d_model')

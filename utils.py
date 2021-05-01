@@ -59,14 +59,14 @@ def load_sent_with_tokenizer(path, add_eos=False):
 def load_data(path, add_eos=False, cat_sent=False, max_len=512, tokenizer_type=None):
     if tokenizer_type is not None:
         global tokenizer
-        from transformers import BertTokenizer
-        tokenizer=BertTokenizer.from_pretrained(tokenizer_type)
+        from transformers import AutoTokenizer, BertTokenizer
+        tokenizer=AutoTokenizer.from_pretrained(tokenizer_type)
 
     if not add_eos:
         print('WARNING: You should always use add_eos to get comparable PPL on '
               'language modeling tasks')
 
-    sents = load_sent(path, add_eos) if not zh else load_sent_with_tokenizer(path, add_eos)
+    sents = load_sent(path, add_eos) if not tokenizer else load_sent_with_tokenizer(path, add_eos)
     if cat_sent:
         if not add_eos:
             raise ValueError('Using cat_sent without add_eos')

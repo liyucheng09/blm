@@ -116,3 +116,4 @@ __temp_weight_ddp_end.ckpt
 checkpoints/
 README.md
 .vscode/*
+data/*
