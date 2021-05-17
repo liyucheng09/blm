@@ -10,40 +10,38 @@ from vocab import Vocab
 from utils import load_data, get_early_stopping_callback
 from dataset import get_train_dataloader, get_eval_dataloader
 
-
 def main(args):
     pl.seed_everything(args.seed)
-
     torch.multiprocessing.set_sharing_strategy('file_system')
-
     args.gpus=torch.cuda.device_count()
     args.multigpu = torch.cuda.device_count() > 1
 
-    is_zh=(('yezi' in args.train) and ('yezi' in args.valid))
+    if args.model_type == 'pblm':
+        if args.tokenizer_name is None: args.tokenizer_name = args.plm_name
 
-    train_data = load_data(args.train, args.add_eos, args.cat_sent, args.max_len, ('yezi' in args.train))
-    valid_data = load_data(args.valid, args.add_eos, args.cat_sent, args.max_len, ('yezi' in args.valid))
+    train_data = load_data(args.train, args.add_eos, args.cat_sent, args.max_len, args.tokenizer_name)
+    valid_data = load_data(args.valid, args.add_eos, args.cat_sent, args.max_len, args.tokenizer_name)
 
     os.makedirs(args.root_dir, exist_ok=True)
 
-    if not is_zh:
+    if args.tokenizer_name is None:
         vocab_file = os.path.join(args.root_dir, 'vocab.txt')
         if not os.path.isfile(vocab_file):
             max_blank_len = args.max_len if args.model_type == 'lblm' else None
             Vocab.build(train_data, vocab_file, args.vocab_size, max_blank_len)
-        vocab = Vocab(vocab_file)
-        args.vocab_size = vocab.size
+        tokenizer = Vocab(vocab_file)
+        args.vocab_size = tokenizer.size
     else:
-        from transformers import BertTokenizer
-        tokenizer=BertTokenizer.from_pretrained('zh_tokenizer')
+        from transformers import BertTokenizer, AutoTokenizer
+        tokenizer=AutoTokenizer.from_pretrained(args.tokenizer_name)
         args.vocab_size=tokenizer.vocab_size
 
     train_dl = get_train_dataloader(
-        train_data, vocab if not is_zh else tokenizer, args.max_tok,
+        train_data, tokenizer, args.max_tok,
         data_workers=args.data_workers if not args.multigpu else 0,
         model_type=args.model_type)
     val_dl = get_eval_dataloader(
-        valid_data, vocab if not is_zh else tokenizer, args.eval_max_tok,
+        valid_data, tokenizer, args.eval_max_tok,
         data_workers=args.data_workers if not args.multigpu else 0,
         model_type=args.model_type)
 
@@ -62,7 +60,9 @@ def main(args):
         precision=16 if args.fp16 else 32,
         default_root_dir=args.root_dir,
         resume_from_checkpoint=args.load_checkpoint,
-        num_sanity_val_steps=2,
+        num_sanity_val_steps=0,
+        limit_train_batches=2,
+        limit_val_batches=2,
     )
 
     trainer.fit(model, train_dataloader=train_dl, val_dataloaders=val_dl)
@@ -93,8 +93,11 @@ if __name__ == '__main__':
 
     # Model
     parser.add_argument('--model_type', default='blm',
-                        choices=['blm', 'inst', 'lblm'],
+                        choices=['blm', 'inst', 'lblm', 'pblm'],
                         help='model type: blm, inst or lblm')
+    parser.add_argument('--plm_name', type=str,
+                        help='pretrained model type: available transformers models')
+    parser.add_argument('--tokenizer_name', type=str)
 
     parser.add_argument('--d_model', type=int, default=512,
                         help='transformer dimension d_model')

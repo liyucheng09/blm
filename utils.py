@@ -10,7 +10,6 @@ def strip_eos(sents):
     return [sent[:sent.index('<eos>')] if '<eos>' in sent else sent
             for sent in sents]
 
-
 def makedir(path):
     dir = os.path.dirname(path)
     if dir:
@@ -46,7 +45,7 @@ def load_sent(path, add_eos=False):
             sents.append(s)
     return sents
 
-def load_zh_sent(path, add_eos=False):
+def load_sent_with_tokenizer(path, add_eos=False):
     sents=[]
     with open(path) as f:
         for line in tqdm(f):
@@ -57,17 +56,17 @@ def load_zh_sent(path, add_eos=False):
             sents.append(s)
     return sents
 
-def load_data(path, add_eos=False, cat_sent=False, max_len=512, zh=False):
-    if zh:
+def load_data(path, add_eos=False, cat_sent=False, max_len=512, tokenizer_type=None):
+    if tokenizer_type is not None:
         global tokenizer
-        from transformers import BertTokenizer
-        tokenizer=BertTokenizer.from_pretrained('zh_tokenizer')
+        from transformers import AutoTokenizer, BertTokenizer
+        tokenizer=AutoTokenizer.from_pretrained(tokenizer_type)
 
     if not add_eos:
         print('WARNING: You should always use add_eos to get comparable PPL on '
               'language modeling tasks')
 
-    sents = load_sent(path, add_eos) if not zh else load_zh_sent(path, add_eos)
+    sents = load_sent(path, add_eos) if not tokenizer else load_sent_with_tokenizer(path, add_eos)
     if cat_sent:
         if not add_eos:
             raise ValueError('Using cat_sent without add_eos')

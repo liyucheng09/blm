@@ -58,7 +58,6 @@ class LM(pl.LightningModule):
         for i in outputs:
             loss+=i['loss'].cpu().detach().item()
         loss/=len(outputs)
-        self.history['train_loss'].append(loss)
 
         return {'log':{'train_loss': loss}}
 
