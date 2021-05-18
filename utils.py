@@ -108,6 +108,6 @@ def get_model(checkpoint_file, device):
 def get_early_stopping_callback():
     return EarlyStopping(
         monitor='train_loss',
-        patience=30,
+        patience=40,
         mode='min',
     )

@@ -14,6 +14,7 @@ class PblmArgs(TrainingArgs):
     is_zh : bool = True
     ds_name : str = 'train'
     d_model : int = 768
+    prefix : str = 'v0.1'
 
 if __name__ == '__main__':
     args = get_args(PblmArgs)
@@ -51,7 +52,8 @@ if __name__ == '__main__':
         distributed_backend = 'ddp' if args.multigpu else None,
         log_every_n_steps = args.log_steps,
         default_root_dir = args.root_dir,
-        callbacks=callbacks['checkpoint']
+        callbacks = callbacks['checkpoint'],
+        # limit_train_batches=10x
     )
 
     trainer.fit(model, train_dataloader=train_dl)

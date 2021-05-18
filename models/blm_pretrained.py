@@ -34,7 +34,7 @@ class PBLM(BLM):
     
     def forward_encoder(self, canvas):
         attention_mask = torch.ones_like(canvas)
-        attention_mask = attention_mask.where(canvas!=self.hparams.pad_token_id, torch.tensor(0))
+        attention_mask = attention_mask.where(canvas!=self.hparams.pad_token_id, torch.tensor(0).to(canvas.device))
         output=self.enc(canvas, attention_mask=attention_mask)
         return output.last_hidden_state
     
