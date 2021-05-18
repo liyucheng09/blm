@@ -12,7 +12,7 @@ from .lm import LM
 class PBLM(BLM):
     def __init__(self, hparams):
         super(LM, self).__init__()
-        self.hparams=vars(hparams)
+        self.save_hyperparameters(vars(hparams))
 
         self.word = nn.Linear(hparams.d_model, hparams.vocab_size, bias=False)
         nn.init.xavier_normal_(self.word.weight)
