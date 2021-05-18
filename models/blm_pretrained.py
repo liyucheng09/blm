@@ -12,7 +12,7 @@ from .lm import LM
 class PBLM(BLM):
     def __init__(self, hparams):
         super(LM, self).__init__()
-        self.hparams=vars(hparams)
+        self.save_hyperparameters(vars(hparams))
 
         self.word = nn.Linear(hparams.d_model, hparams.vocab_size, bias=False)
         nn.init.xavier_normal_(self.word.weight)
@@ -34,7 +34,7 @@ class PBLM(BLM):
     
     def forward_encoder(self, canvas):
         attention_mask = torch.ones_like(canvas)
-        attention_mask = attention_mask.where(canvas!=self.hparams.pad_token_id, torch.tensor(0))
+        attention_mask = attention_mask.where(canvas!=self.hparams.pad_token_id, torch.tensor(0).to(canvas.device))
         output=self.enc(canvas, attention_mask=attention_mask)
         return output.last_hidden_state
     

@@ -14,6 +14,7 @@ class PblmArgs(TrainingArgs):
     is_zh : bool = True
     ds_name : str = 'train'
     d_model : int = 768
+    prefix : str = 'v0.1'
 
 if __name__ == '__main__':
     args = get_args(PblmArgs)
@@ -24,7 +25,7 @@ if __name__ == '__main__':
             is_zh=args.is_zh, max_length = args.max_sent_len, min_sent_length = args.min_sent_len)
     ds = get_tokenized_ds(args.dataset_scripts, 
         args.train_data, tokenizer, max_length = args.max_sent_len, 
-        min_sent_length=args.min_sent_len, shuffle=True, tokenize_func='wo_padding')
+        min_sent_length=args.min_sent_len, shuffle=True, tokenize_func='no_padding')
     train_ds=ds[args.ds_name]
 
     processor.block_size = 512
@@ -50,7 +51,9 @@ if __name__ == '__main__':
         gpus = args.gpus,
         distributed_backend = 'ddp' if args.multigpu else None,
         log_every_n_steps = args.log_steps,
-        default_root_dir = args.root_dir  
+        default_root_dir = args.root_dir,
+        callbacks = callbacks['checkpoint'],
+#         limit_train_batches=10x
     )
 
     trainer.fit(model, train_dataloader=train_dl)

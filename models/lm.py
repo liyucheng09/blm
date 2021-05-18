@@ -59,7 +59,7 @@ class LM(pl.LightningModule):
             loss+=i['loss'].cpu().detach().item()
         loss/=len(outputs)
 
-        return {'log':{'train_loss': loss}}
+        self.log('train_loss', loss)
 
     def eval_epoch_end(self, outputs):
         # n_words and nll are batch/dataset sum, other losses are mean
