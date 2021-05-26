@@ -1,3 +1,4 @@
+import numpy as np
 from .blm import BLM
 from transformers import AutoModel, AutoModelForMaskedLM
 import pytorch_lightning as pl
@@ -7,6 +8,7 @@ import torch.nn.functional as F
 import torch
 from lyc.utils import get_optimizer_and_schedule
 from .lm import LM
+import itertools
 
 
 class PBLM(BLM):
@@ -45,9 +47,9 @@ class PBLM(BLM):
     
     def losses(self, seq, n, n_real):
         k = batch_randint(0, n - 1)
-        rank = sample_permutation(seq)
+        rank = sample_permutation(seq, first_id=self.hparams.first_id, last_id=self.hparams.last_id)
         keep = (rank < k.unsqueeze(1))
-        canvas, blanks, rest, loc, lb, rb = get_canvas(seq, keep, n)
+        canvas, blanks, rest, loc, lb, rb = get_canvas(seq, keep, n, blank_id=self.hparams.blank_id)
         loss_loc, loss_word, loss_lrb = self.get_loss(seq, canvas, blanks, rest, loc, lb, rb)
         nll_lb = (loss_loc + loss_word + loss_lrb) * n.float() - (n + 1).float().lgamma()
         return {'loss': nll_lb.sum() / n_real.sum(),
@@ -84,3 +86,43 @@ class PBLM(BLM):
         params_group=[{'params': [param for name, param in self.named_parameters() if 'enc' in name], 'lr': self.hparams.sm_lr},
                 {'params': [param for name, param in self.named_parameters() if 'enc' not in name], 'lr': self.hparams.lr}]
         return get_optimizer_and_schedule(params_group, lr=self.hparams.lr)
+
+    def get_prob(self, context, tokenized_choice):
+        """
+        返回输入choice的prob。
+
+        Args：
+            context：List, 分词后的context，有且只有一个blank
+            tokenized_choice: List，分词后的choice
+        
+        Return:
+
+        """
+        blank_index = context.index(6)
+        seq = context[:blank_index] + tokenized_choice + context[blank_index+1:]
+        seq = torch.LongTensor(seq)
+        ones = np.ones_like(context)
+
+        n = len(context) + len(tokenized_choice) - 1
+        n = torch.LongTensor(n)
+
+        ranks = np.array(list(itertools.permutations(range(len(tokenized_choice)))))
+        a = []
+        for rank in ranks:
+            logp = 0.
+            for k in range(rank.size(0)):
+                keep = (rank < k)
+                keep = ones[:blank_index] + keep + ones[blank_index+1:]
+                keep = torch.BoolTensor(keep)
+                canvas, blanks, rest, loc, lb, rb = get_canvas(seq, keep, n)
+                k_th = (rank == k).nonzero(as_tuple=True)[1]
+                x, y = (rest == k_th.unsqueeze(1)).nonzero(as_tuple=True)
+                assert torch.all(x == torch.arange(len(seq), device=seq.device))
+                rest, loc, lb, rb = [t[x, y].unsqueeze(1) for t in [rest, loc, lb, rb]]
+                loss_loc, loss_word, loss_lrb = self.get_loss(seq, canvas, blanks, rest, loc, lb, rb)
+                logp -= loss_loc + loss_word + loss_lrb
+            a.append(logp.unsqueeze(1))
+        return np.log(ranks.size(0)) - (n + 1).float().lgamma() - torch.logsumexp(torch.cat(a, 1), 1)
+
+        
+        

@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from . lm import LM
 from . torch_utils import get_canvas, sample_permutation, seq_cross_entropy, collect, batch_randint, select
 from vocab import Vocab
+import itertools
 
 
 class BLM(LM):
@@ -130,3 +131,52 @@ class BLM(LM):
             fill.append([id for id, isf in zip(seq, is_fill) if isf])
             full.append(seq)
         return fill, full
+
+    def get_prob(self, contexts, tokenized_choices):
+        """
+        返回输入choice的prob。
+
+        Args：
+            context：List - 2D, 分词后的context，每句有且只有一个blank
+            tokenized_choice: List - 2D，分词后的choice，每行一个choice，分词后的长度应相同
+        
+        Return:
+            negative log likelihood: Tensor
+        """
+
+        assert all([len(i)==len(tokenized_choices[0]) for i in tokenized_choices])
+        seq=[]
+        blank_idx = []
+        for index, (context, tokenized_choice) in enumerate(zip(contexts, tokenized_choices)):
+            blank_index = context.index(6)
+            blank_idx.append(blank_index)
+            seq.append(context[:blank_index] + tokenized_choice + context[blank_index+1:])
+
+        max_length = max([len(i) for i in seq])
+        seqs = np.zeros((len(seq), max_length))
+        for i, j in enumerate(seq):
+            seqs[i][0:len(j)] = j
+        n = (seqs!=0).sum(axis=-1)
+
+        keeps=np.ones_like(seqs)
+        ranks = np.array(list(itertools.permutations(range(len(tokenized_choices[0]))))) + np.array(blank_idx)[:, None]
+        seq, n, ranks, blank_idx_pt = torch.LongTensor(seq), torch.LongTensor(n), torch.LongTensor(ranks), torch.LongTensor(np.array(blank_idx)[:, None])
+        a = []
+        for rank in ranks:
+            logp = 0.
+            for k in range(rank.size(0)):
+                k = blank_idx_pt +  k
+                keep = (rank < k)
+                for index, i in enumerate(blank_idx):
+                    keeps[index][i:i+len(tokenized_choices[0])] = keep
+                keep = torch.BoolTensor(keeps)
+                canvas, blanks, rest, loc, lb, rb = get_canvas(seq, keep, n)
+                k_th = (rank == k).nonzero(as_tuple=True)[1]
+                k_th = k_th + blank_idx_pt
+                x, y = (rest == k_th).nonzero(as_tuple=True)
+                assert torch.all(x == torch.arange(len(seq), device=seq.device))
+                rest, loc, lb, rb = [t[x, y].unsqueeze(1) for t in [rest, loc, lb, rb]]
+                loss_loc, loss_word, loss_lrb = self.get_loss(seq, canvas, blanks, rest, loc, lb, rb)
+                logp -= loss_loc + loss_word + loss_lrb
+            a.append(logp.unsqueeze(1))
+        return np.log(ranks.size(0)) - (n + 1).float().lgamma() - torch.logsumexp(torch.cat(a, 1), 1)

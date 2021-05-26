@@ -13,7 +13,8 @@ class LM(pl.LightningModule):
 
     def __init__(self, hparams):
         super().__init__()
-        self.hparams = hparams
+        # self.hparams = hparams
+        self.save_hyperparameters(hparams)
         hparams = self.hparams  # a['key'] (if so) -> a.key
 
         self.enc = Encoder(

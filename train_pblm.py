@@ -43,6 +43,10 @@ if __name__ == '__main__':
 
     args.vocab_size = tokenizer.vocab_size
     args.pad_token_id = tokenizer.pad_token_id
+    args.first_id = tokenizer.cls_token_id
+    args.last_id = tokenizer.sep_token_id
+    args.blank_id = tokenizer.convert_token_to_id('[BLANK]')
+    
     model = PBLM(args)
     callbacks = get_pl_callbacks(args)
 

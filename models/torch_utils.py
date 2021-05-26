@@ -40,11 +40,11 @@ def batch_randint(start, batch_end):
     return start + (torch.rand_like(batch_end.float()) * (batch_end - start + 1).float()).long()
 
 
-def sample_permutation(seq):
+def sample_permutation(seq, pad_id=0, first_id=2, last_id=3):
     score = torch.rand_like(seq.float())
-    score.masked_fill_(seq == Vocab.pad, 1)         # always put pads last
-    score.masked_fill_(seq == Vocab.first, -1)      # always keep <first>
-    score.masked_fill_(seq == Vocab.last, -1)       # always keep <last>
+    score.masked_fill_(seq == pad_id, 1)         # always put pads last
+    score.masked_fill_(seq == first_id, -1)      # always keep <first>
+    score.masked_fill_(seq == last_id, -1)       # always keep <last>
     indices = score.argsort()
     rank = torch.zeros_like(seq)
     rank[torch.arange(len(seq)).unsqueeze(1), indices] = \
@@ -83,7 +83,7 @@ def to_tensor(x, pad_id, device):
     return torch.tensor(x_).to(device)
 
 
-def get_canvas(seq, keep, n):
+def get_canvas(seq, keep, n, blank_id = 6, pad_id = 0):
     """
     Args:
         seq: original (batched) sequence of tokens
@@ -98,12 +98,12 @@ def get_canvas(seq, keep, n):
         rb: whether to create a right blank for predicting each token in rest
         (rest, loc, lb, rb have the same shape)
     """
-    res = get_canvas_cpp.get_canvas(seq.tolist(), keep.tolist(), n.tolist(), Vocab.blank)
-    pad = [Vocab.pad, -1, -1, -1, -1, -1]
+    res = get_canvas_cpp.get_canvas(seq.tolist(), keep.tolist(), n.tolist(), blank_id)
+    pad = [pad_id, -1, -1, -1, -1, -1]
     return [to_tensor(r, p, seq.device) for r, p in zip(res, pad)]
 
 
-def get_known_length_canvas(seq, keep, n):
+def get_known_length_canvas(seq, keep, n, pad_id = 0):
     """
     Return:
         canvas: replace consecutive masked tokens in seq by the <blank_t> token
@@ -114,11 +114,11 @@ def get_known_length_canvas(seq, keep, n):
         (rest, loc, lb have the same shape)
     """
     res = get_canvas_cpp.get_known_length_canvas(seq.tolist(), keep.tolist(), n.tolist(), Vocab.blank_0)
-    pad = [Vocab.pad, -1, -1, -1, -1]
+    pad = [pad_id, -1, -1, -1, -1]
     return [to_tensor(r, p, seq.device) for r, p in zip(res, pad)]
 
 
-def get_ins_canvas(seq, keep, n):
+def get_ins_canvas(seq, keep, n, pad_id = 0):
     """
     Return:
         canvas: remove masked tokens in seq
@@ -127,5 +127,5 @@ def get_ins_canvas(seq, keep, n):
         (rest, loc have the same shape)
     """
     res = get_canvas_cpp.get_insertion_canvas(seq.tolist(), keep.tolist(), n.tolist())
-    pad = [Vocab.pad, -1, -1]
+    pad = [pad_id, -1, -1]
     return [to_tensor(r, p, seq.device) for r, p in zip(res, pad)]
